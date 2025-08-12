@@ -28,24 +28,46 @@ export default function SignupPage() {
     };
 
     const onSignup = async () => {
-        // Client-side validation
+        // Client-side validation with professional messages
         if (!user.userName.trim()) {
-            toast.error("Please enter your name");
+            toast.error("Full name is required", {
+                duration: 4000,
+                position: 'top-center',
+            });
+            return;
+        }
+
+        if (user.userName.trim().length < 2) {
+            toast.error("Name must be at least 2 characters long", {
+                duration: 4000,
+                position: 'top-center',
+            });
             return;
         }
 
         if (!isValidEmail(user.email)) {
-            toast.error("Please enter a valid email address");
+            toast.error("Please enter a valid email address", {
+                duration: 4000,
+                position: 'top-center',
+            });
             return;
         }
 
         if (!isValidPassword(user.password)) {
-            toast.error("Password must be at least 6 characters long");
+            toast.error("Password must be at least 6 characters long", {
+                duration: 4000,
+                position: 'top-center',
+            });
             return;
         }
 
         try {
             setLoading(true);
+
+            // Show loading toast
+            const loadingToast = toast.loading("Creating your account...", {
+                position: 'top-center',
+            });
 
             // Trim whitespace from inputs
             const userData = {
@@ -56,28 +78,64 @@ export default function SignupPage() {
 
             const response = await axios.post('/api/users/signup', userData);
 
-            toast.success(response.data.message || "Account created successfully!");
+            // Dismiss loading toast
+            toast.dismiss(loadingToast);
+
+            // Show success message
+            toast.success(`Account created successfully! Welcome ${userData.userName}! 🎉`, {
+                duration: 4000,
+                position: 'top-center',
+                icon: '✅',
+            });
+
             console.log("User created successfully:", response.data.user);
             
-            router.push('/login');
+            // Small delay to show success message before redirect
+            setTimeout(() => {
+                toast.success("Redirecting to login page...", {
+                    duration: 2000,
+                    position: 'top-center',
+                });
+                router.push('/login');
+            }, 2000);
             
-        } catch (error:any) {
-            // Show specific error message from server if available
-            const errorMessage = error.response?.data?.error || 
-                               error.response?.data?.message || 
-                               "An error occurred while signing up. Please try again.";
-            
-            toast.error(errorMessage);
-            console.error("Error during signup:", error);
-        } finally {
+        } catch (error: any) {
             setLoading(false);
+            
+            // Handle different types of errors professionally
+            let errorMessage = "Failed to create account. Please try again.";
+            
+            if (error.response?.status === 400) {
+                const serverError = error.response.data?.error;
+                if (serverError?.includes("already exists") || serverError?.includes("duplicate")) {
+                    errorMessage = "An account with this email already exists. Please try logging in.";
+                } else if (serverError?.includes("validation") || serverError?.includes("required")) {
+                    errorMessage = "Please check all required fields and try again.";
+                } else {
+                    errorMessage = serverError || errorMessage;
+                }
+            } else if (error.response?.status >= 500) {
+                errorMessage = "Server error. Please try again in a moment.";
+            } else if (error.code === 'NETWORK_ERROR' || !error.response) {
+                errorMessage = "Network error. Please check your connection.";
+            } else {
+                errorMessage = error.response?.data?.error || error.response?.data?.message || errorMessage;
+            }
+            
+            toast.error(errorMessage, {
+                duration: 5000,
+                position: 'top-center',
+                icon: '❌',
+            });
+            
+            console.error("Signup error:", error);
         }
     };
 
     useEffect(() => {
         // Enable button only when all fields are filled and valid
         const isFormValid = 
-            user.userName.trim().length > 0 && 
+            user.userName.trim().length >= 2 && 
             isValidEmail(user.email) && 
             isValidPassword(user.password);
         
@@ -89,15 +147,16 @@ export default function SignupPage() {
             <div className='w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-md'>
                 <div className='text-center'>
                     <h1 className='text-3xl font-bold text-gray-900 mb-2'>
-                        {loading ? "Processing..." : "Sign Up"}
+                        {loading ? "Creating Account..." : "Create Account"}
                     </h1>
+                    <p className="text-sm text-gray-600 mb-4">Join us today! It only takes a minute</p>
                     <hr className='border-gray-300 mb-6' />
                 </div>
 
                 <div className='space-y-4'>
                     <div>
                         <label htmlFor="name" className='block text-sm font-medium text-gray-700 mb-1'>
-                            Name
+                            Full Name
                         </label>
                         <input 
                             className='w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200' 
@@ -105,15 +164,20 @@ export default function SignupPage() {
                             type="text" 
                             value={user.userName} 
                             onChange={(e) => setUser({...user, userName: e.target.value})} 
-                            placeholder='Enter your name'
+                            placeholder='Enter your full name'
                             disabled={loading}
                             required
                         />
+                        {user.userName.trim().length > 0 && user.userName.trim().length < 2 && (
+                            <p className='text-sm text-red-600 mt-1'>
+                                Name must be at least 2 characters long
+                            </p>
+                        )}
                     </div>
 
                     <div>
                         <label htmlFor="email" className='block text-sm font-medium text-gray-700 mb-1'>
-                            Email
+                            Email Address
                         </label>
                         <input 
                             className='w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition duration-200' 
@@ -121,10 +185,15 @@ export default function SignupPage() {
                             type="email" 
                             value={user.email} 
                             onChange={(e) => setUser({...user, email: e.target.value})} 
-                            placeholder='Enter your email'
+                            placeholder='Enter your email address'
                             disabled={loading}
                             required
                         />
+                        {user.email.length > 0 && !isValidEmail(user.email) && (
+                            <p className='text-sm text-red-600 mt-1'>
+                                Please enter a valid email address
+                            </p>
+                        )}
                     </div>
 
                     <div>
@@ -137,13 +206,13 @@ export default function SignupPage() {
                             type="password" 
                             value={user.password} 
                             onChange={(e) => setUser({...user, password: e.target.value})} 
-                            placeholder='Enter your password (min. 6 characters)'
+                            placeholder='Create a strong password (min. 6 characters)'
                             disabled={loading}
                             required
                         />
                         {user.password.length > 0 && user.password.length < 6 && (
                             <p className='text-sm text-red-600 mt-1'>
-                                Password must be at least 6 characters
+                                Password must be at least 6 characters long
                             </p>
                         )}
                     </div>
@@ -157,7 +226,7 @@ export default function SignupPage() {
                                 : 'bg-blue-600 hover:bg-blue-700 text-white'
                         }`}
                     >
-                        {loading ? "Creating Account..." : "Sign Up"}
+                        {loading ? "Creating Account..." : "Create Account"}
                     </button>
 
                     <div className='text-center pt-4'>
@@ -165,7 +234,7 @@ export default function SignupPage() {
                             href='/login' 
                             className='text-sm text-blue-600 hover:text-blue-800 hover:underline transition duration-200'
                         >
-                            Already have an account? Visit login page
+                            Already have an account? Sign in here
                         </Link>
                     </div>
                 </div>
