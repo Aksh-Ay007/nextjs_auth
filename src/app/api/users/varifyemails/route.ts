@@ -2,6 +2,7 @@ import { connect } from "@/dbconfig/dbConfig";
 import { NextRequest, NextResponse } from "next/server";
 import User from "@/models/userModel";
 
+// Ensure database connection
 connect();
 
 export async function POST(req: NextRequest) {
@@ -9,30 +10,71 @@ export async function POST(req: NextRequest) {
     const reqBody = await req.json();
     const { token } = reqBody;
 
-    console.log("Received token:", token);
+    // Validate token presence
+    if (!token) {
+      return NextResponse.json(
+        { 
+          success: false,
+          error: "Verification token is required" 
+        }, 
+        { status: 400 }
+      );
+    }
 
-    // Await the user lookup
+    console.log("Processing verification for token:", token.substring(0, 10) + "...");
+
+    // Find user with valid token
     const user = await User.findOne({
-      varifyToken: token,
-      varifyTokenExpiry: { $gt: Date.now() }
+      verifyToken: token,
+      verifyTokenExpiry: { $gt: Date.now() }
     });
 
     if (!user) {
-      return NextResponse.json({ error: "Invalid or expired token" }, { status: 400 });
+      return NextResponse.json(
+        { 
+          success: false,
+          error: "Invalid or expired verification token" 
+        }, 
+        { status: 400 }
+      );
     }
 
-    console.log("User found:", user);
+    // Check if already verified
+    if (user.isVerified) {
+      return NextResponse.json(
+        { 
+          success: true,
+          message: "Email is already verified" 
+        }, 
+        { status: 200 }
+      );
+    }
 
-    user.isVarified = true;
-    user.varifyToken = undefined;
-    user.varifyTokenExpiry = undefined;
+    // Update user verification status
+    user.isVerified = true;
+    user.verifyToken = undefined;
+    user.verifyTokenExpiry = undefined;
     await user.save();
 
-    console.log("User verified successfully:", user);
-    return NextResponse.json({ message: "Email verified successfully" }, { status: 200 });
+    console.log("Email verified successfully for user:", user.email);
+
+    return NextResponse.json(
+      { 
+        success: true,
+        message: "Email verified successfully" 
+      }, 
+      { status: 200 }
+    );
 
   } catch (error: any) {
-    console.error("Error in POST /api/users/varifyemails:", error);
-    return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 });
+    console.error("Error in email verification:", error);
+    
+    return NextResponse.json(
+      { 
+        success: false,
+        error: "Internal server error. Please try again later." 
+      }, 
+      { status: 500 }
+    );
   }
 }
